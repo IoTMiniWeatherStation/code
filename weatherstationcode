@@ -1,0 +1,136 @@
+
+#include <DHT.h>
+
+#include <ESP8266WiFi.h>
+
+//library bmp180
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP085_U.h>
+
+Adafruit_BMP085_Unified bmp = Adafruit_BMP085_Unified(10085);
+
+const int ledP=13;
+String apiKey = "QJRK4UU7Q32BKPS0";                                    
+const char* ssid = "lachummaa!!";                                  
+const char* password = "lachu123";                             
+const char* server = "api.thingspeak.com";
+#define DHTPIN 2 
+
+DHT dht(DHTPIN, DHT11,15);
+WiFiClient client;
+
+int sensorPin = A0;    // input for LDR 
+int enable1 = 13;      // enable reading LDR
+int intensity = 0;  // variable to store the value coming from sensor LDR
+
+void setup() {
+
+// declare the enable and ledPin as an OUTPUT:
+pinMode(enable1, OUTPUT);
+pinMode(ledP,OUTPUT);
+Serial.begin(9600);
+delay(10);
+
+dht.begin();
+
+WiFi.begin(ssid, password);
+
+Serial.println();
+Serial.println();
+Serial.print("Connecting to ");
+Serial.println(ssid);
+Serial.print("..........");
+Serial.println();
+WiFi.begin(ssid, password);
+
+while (WiFi.status() != WL_CONNECTED) {
+delay(500);
+
+}
+Serial.println("WiFi connected");
+Serial.println();
+
+}
+
+
+void loop() {
+//DHT11
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)) 
+  {
+   Serial.println("Failed to read from DHT sensor!");
+   return;
+  }
+
+  Serial.print("Temperature:      ");
+  Serial.print(t);
+  Serial.print(" degrees Celcius ");
+  Serial.println();
+
+  Serial.print("Humidity:         ");
+  Serial.print(h);
+  Serial.print("%");
+  Serial.println();
+
+
+//BMP180
+
+ if(!bmp.begin())
+ {
+  Serial.print("Failed to read from BMP sensor!!");
+   while(1);
+ }
+
+  sensors_event_t event;
+  bmp.getEvent(&event);
+
+  Serial.print("Pressure:         ");
+  Serial.print(event.pressure);
+  Serial.println(" hPa");
+//LDR
+
+  digitalWrite(enable1, HIGH); 
+  intensity = analogRead(sensorPin);
+  intensity = constrain(intensity, 300, 850); 
+  intensity = map(intensity, 300, 850, 0, 1023); 
+  Serial.print("Light intensity:  ");
+  Serial.println(intensity);
+  digitalWrite(enable1, LOW);
+  delay(100);
+
+//Thingspeak
+
+  if (client.connect(server,80))
+{
+  digitalWrite(ledP,HIGH);
+  String postStr = apiKey;
+  postStr +="&field1=";
+  postStr += String(t);
+  postStr +="&field2=";
+  postStr += String(h);
+  postStr +="&field3=";
+  postStr += String(event.pressure);
+  postStr +="&field4=";
+  postStr += String(intensity);
+  postStr += "\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n";
+
+  client.print("POST /update HTTP/1.1\n");
+  client.print("Host: api.thingspeak.com\n");
+  client.print("Connection: close\n");
+  client.print("X-THINGSPEAKAPIKEY: "+apiKey+"\n");
+  client.print("Content-Type: application/x-www-form-urlencoded\n");
+  client.print("Content-Length: ");
+  client.print(postStr.length());
+  client.print("\n\n\n\n\n\n\n\n");
+  client.print(postStr);
+
+  digitalWrite(ledP,LOW);
+  
+  }
+  client.stop();
+  delay(20000);
+}
